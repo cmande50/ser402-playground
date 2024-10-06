@@ -1,20 +1,23 @@
 package com.cmande50.app;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-
-import org.json.JSONObject;
+import java.util.stream.Collectors;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import com.google.gson.Gson;
+
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+
 
 /**
  * Lambda function entry point. You can change to use other pojo type or implement
@@ -72,12 +75,11 @@ public class APIHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         APIGatewayProxyResponseEvent  response = new APIGatewayProxyResponseEvent ();
 
         HashMap<String, String> headers = new HashMap<String, String>();
-        headers.put("Content-Type", "text/html");
+        headers.put("Content-Type", "application/json");
 
         response.setHeaders(headers);
         response.setIsBase64Encoded(false);
-        response.setStatusCode(200);
-        response.setBody("Items Handler");
+
 
         if (event.getHttpMethod().equals("GET")) {
 
@@ -86,15 +88,22 @@ public class APIHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
                 .build();
 
             try {
-                ScanResponse dbResponse = dynamoDbClient.scan(scanRequest);
-                response.setBody(new JSONObject(dbResponse.items()).toString());
-            } catch (Exception e) {
-                System.err.println("Error scanning table: " + e.getMessage());
-            } finally {
-                dynamoDbClient.close();
-            }
+                ScanResponse scanResponse = dynamoDbClient.scan(scanRequest);
+                List<Map<String, AttributeValue>> items = scanResponse.items();
+                String jsonResponse = new Gson().toJson(items);
 
+                response.setBody(jsonResponse);
+                response.setStatusCode(200);
+                
+                
 
+            } catch (DynamoDbException e) {
+                logger.log(e.toString());
+                response.setStatusCode(500);
+                response.setBody("{\"error\": \"Internal Server Error\"}");
+            } 
+
+            
             return response;
         } else if (event.getHttpMethod().equals("POST")) {
 

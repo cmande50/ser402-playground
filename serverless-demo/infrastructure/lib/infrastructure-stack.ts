@@ -32,6 +32,8 @@ export class InfrastructureStack extends cdk.Stack {
       runtime: lambda.Runtime.JAVA_17,
       handler: "com.cmande50.app.APIHandler::handleRequest",
       code: lambda.Code.fromAsset("../software/serverless-demo/target/serverless-demo.jar"),
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
     });
     table.grantReadWriteData(handler);
 
