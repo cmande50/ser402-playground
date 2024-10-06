@@ -3,6 +3,7 @@ package com.cmande50.app;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -15,6 +16,7 @@ import com.google.gson.Gson;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 
@@ -106,6 +108,30 @@ public class APIHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
             
             return response;
         } else if (event.getHttpMethod().equals("POST")) {
+
+            
+
+            UUID uuid = UUID.randomUUID();
+
+            Map<String, AttributeValue> item = new HashMap<>();
+            item.put("pk", AttributeValue.builder().s("item#" + uuid).build());
+            item.put("value", AttributeValue.builder().n(event.getBody()).build());
+
+            PutItemRequest putItemRequest = PutItemRequest.builder()
+                .tableName("serverless-demo-table")
+                .item(item)
+                .build();
+
+            try {
+                dynamoDbClient.putItem(putItemRequest);
+                response.setStatusCode(200);
+                response.setBody("{\"response\": \"Success\"}");
+            } catch (DynamoDbException e) {
+                logger.log(e.toString());
+                response.setStatusCode(500);
+                response.setBody("{\"error\": \"Internal Server Error\"}");
+            }
+
 
             return response;
         }
