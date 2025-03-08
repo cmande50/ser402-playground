@@ -38,6 +38,7 @@
     "@types/aws-lambda": "^8.10.147",
     "aws-cdk-lib": "2.182.0",
     "constructs": "^10.4.2",
+    "esbuild": "^0.25.1",
     "source-map-support": "^0.5.21"
   }
 }

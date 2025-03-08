@@ -26,23 +26,20 @@ export class BackendStack extends cdk.Stack {
       },
     });
 
-    // Add domain for Cognito hosted UI
-    const deploymentHash = crypto
-      .createHash('md5')
-      .update(`${this.account}-${this.region}`)
-      .digest('hex')
-      .substring(0, 8);
+
+    // Add domain to the user pool  
     const userPoolDomain = this.userPool.addDomain('CognitoDomain', {
       cognitoDomain: {
-        domainPrefix: `genics-admin-${deploymentHash}`,
+        domainPrefix: `${this.stackName}`.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       },
     });
     this.userPoolDomain = userPoolDomain.domainName;
 
-    // Create or import SSM parameters
+    // Import Google OAuth credentials from SSM parameters or create placeholder parameters
+    // Note: You need to manually update these parameters with your real Google OAuth credentials
     const googleClientIdParam = new ssm.StringParameter(this, 'GoogleClientIdParam', {
       parameterName: '/genics-admin/google-oauth/client-id',
-      stringValue: 'PLACEHOLDER_CLIENT_ID', // You'll update this after deployment
+      stringValue: 'PLACEHOLDER_CLIENT_ID', // Replace with your actual Google OAuth Client ID
       tier: ssm.ParameterTier.STANDARD,
       description: 'Google OAuth Client ID for Genics Admin',
       simpleName: false,
@@ -50,26 +47,24 @@ export class BackendStack extends cdk.Stack {
 
     const googleClientSecretParam = new ssm.StringParameter(this, 'GoogleClientSecretParam', {
       parameterName: '/genics-admin/google-oauth/client-secret',
-      stringValue: 'PLACEHOLDER_CLIENT_SECRET', // Using plain string instead of SecretValue
+      stringValue: 'PLACEHOLDER_CLIENT_SECRET', // Replace with your actual Google OAuth Client Secret
       tier: ssm.ParameterTier.STANDARD,
       description: 'Google OAuth Client Secret for Genics Admin',
       simpleName: false,
     });
 
-    // Add Google as identity provider
-    const provider = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
+    // Create Google Identity Provider
+    const googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleProvider', {
       userPool: this.userPool,
       clientId: googleClientIdParam.stringValue,
       clientSecretValue: cdk.SecretValue.unsafePlainText(googleClientSecretParam.stringValue),
-      scopes: ['profile', 'email'],
+      scopes: ['profile', 'email', 'openid'],
       attributeMapping: {
         email: cognito.ProviderAttribute.GOOGLE_EMAIL,
-        givenName: cognito.ProviderAttribute.GOOGLE_GIVEN_NAME,
-        familyName: cognito.ProviderAttribute.GOOGLE_FAMILY_NAME,
       },
     });
 
-    // Create User Pool Client
+    // Create User Pool Client for frontend application
     this.userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
       userPool: this.userPool,
       authFlows: {
@@ -78,8 +73,14 @@ export class BackendStack extends cdk.Stack {
       },
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.GOOGLE],
       oAuth: {
-        callbackUrls: ['http://localhost:3000/', 'https://${CloudFrontDistributionDomain}/'], // Will be updated
-        logoutUrls: ['http://localhost:3000/', 'https://${CloudFrontDistributionDomain}/'], // Will be updated
+        callbackUrls: [
+          'http://localhost:3000/callback',
+          'https://${CloudFrontDistributionDomain}/callback', // Will be updated with CloudFront URL in frontend-stack.ts
+        ],
+        logoutUrls: [
+          'http://localhost:3000/',
+          'https://${CloudFrontDistributionDomain}/', // Will be updated with CloudFront URL by frontend-stack.ts
+        ],
         flows: {
           authorizationCodeGrant: true,
         },
@@ -88,7 +89,7 @@ export class BackendStack extends cdk.Stack {
     });
 
     // Make sure Google provider is added to the User Pool before the User Pool Client
-    this.userPoolClient.node.addDependency(provider);
+    this.userPoolClient.node.addDependency(googleProvider);
 
     // Create log groups for Lambda functions
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {

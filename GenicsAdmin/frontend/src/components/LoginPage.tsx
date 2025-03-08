@@ -1,23 +1,36 @@
+// src/components/LoginPage.tsx
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useEffect } from 'react';
 import '../styles/global.css';
 
 const LoginPage = () => {
-  const { loginWithGoogle, isAuthenticated } = useAuth();
+  const { loginWithGoogle, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Use useEffect for navigation to avoid render-time navigation
+  // Redirect to toggle page if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/toggle');
     }
   }, [isAuthenticated, navigate]);
 
+  // Handle Google login
   const handleGoogleLogin = () => {
     loginWithGoogle();
-    // Navigation will happen in the useEffect when isAuthenticated changes
   };
+
+  // Show loading state if checking authentication
+  if (isLoading) {
+    return (
+      <div className="page login-page">
+        <div className="login-container">
+          <h1>Loading...</h1>
+          <p>Please wait while we check your authentication status.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page login-page">

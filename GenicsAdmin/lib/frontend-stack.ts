@@ -9,6 +9,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as nodeJsLambda from 'aws-cdk-lib/aws-lambda-nodejs';
 
 export interface FrontendStackProps extends cdk.StackProps {
   apiEndpoint: string;
@@ -61,56 +62,19 @@ export class FrontendStack extends cdk.Stack {
     });
 
     // Custom resource to update UserPoolClient with CloudFront URL
-    const updateAuthURLsFunction = new lambda.Function(this, 'UpdateAuthURLsFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        
-        exports.handler = async (event, context) => {
-          const { userPoolId, userPoolClientId, cloudFrontDomain } = event.ResourceProperties;
-          const cognitoIdp = new AWS.CognitoIdentityServiceProvider();
-          
-          // Get current client settings
-          const listResponse = await cognitoIdp.describeUserPoolClient({
-            UserPoolId: userPoolId,
-            ClientId: userPoolClientId
-          }).promise();
-          
-          const client = listResponse.UserPoolClient;
-          
-          // Update callback and logout URLs
-          const callbackURLs = [
-            'http://localhost:3000/',
-            \`https://\${cloudFrontDomain}/\`
-          ];
-          
-          const logoutURLs = [
-            'http://localhost:3000/',
-            \`https://\${cloudFrontDomain}/\`
-          ];
-          
-          // Update client
-          await cognitoIdp.updateUserPoolClient({
-            UserPoolId: userPoolId,
-            ClientId: userPoolClientId,
-            AllowedOAuthFlows: client.AllowedOAuthFlows,
-            AllowedOAuthFlowsUserPoolClient: client.AllowedOAuthFlowsUserPoolClient,
-            AllowedOAuthScopes: client.AllowedOAuthScopes,
-            CallbackURLs: callbackURLs,
-            LogoutURLs: logoutURLs,
-            SupportedIdentityProviders: client.SupportedIdentityProviders,
-          }).promise();
-          
-          return {
-            PhysicalResourceId: \`\${userPoolId}-\${userPoolClientId}-updated\`,
-            Data: {
-              message: 'Auth URLs updated successfully',
-            },
-          };
-        }
-      `),
+    const updateAuthURLsFunction = new nodeJsLambda.NodejsFunction(this, 'UpdateAuthURLsFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X, // Use the latest runtime
+      entry: path.join(__dirname, '../lambda/update-auth-urls/index.ts'),
+      handler: 'handler',
+      bundling: {
+        externalModules: [], // Bundle everything
+        minify: true,
+        sourceMap: true,
+      },
       timeout: cdk.Duration.seconds(30),
+      environment: {
+        NODE_OPTIONS: '--enable-source-maps',
+      },
     });
 
     updateAuthURLsFunction.addToRolePolicy(
@@ -136,15 +100,19 @@ export class FrontendStack extends cdk.Stack {
     });
 
     // Generate config.js file for frontend
-    const configContent = `window.appConfig = ${JSON.stringify({
-      Region: this.region,
-      UserPoolId: props.userPoolId,
-      UserPoolClientId: props.userPoolClientId,
-      UserPoolDomain: props.userPoolDomain,
-      ApiEndpoint: props.apiEndpoint,
-      RedirectSignIn: `https://${distribution.distributionDomainName}/`,
-      RedirectSignOut: `https://${distribution.distributionDomainName}/`,
-    }, null, 2)};`;
+    const configContent = `window.appConfig = ${JSON.stringify(
+      {
+        Region: this.region,
+        UserPoolId: props.userPoolId,
+        UserPoolClientId: props.userPoolClientId,
+        UserPoolDomain: props.userPoolDomain,
+        ApiEndpoint: props.apiEndpoint,
+        RedirectSignIn: `https://${distribution.distributionDomainName}/callback`,
+        RedirectSignOut: `https://${distribution.distributionDomainName}/`,
+      },
+      null,
+      2
+    )};`;
 
     // Create a temporary directory for the config file
     const configDir = path.join(__dirname, '../frontend/public/config');
@@ -154,31 +122,27 @@ export class FrontendStack extends cdk.Stack {
 
     // Write the config file
     fs.writeFileSync(path.join(configDir, 'config.js'), configContent);
-    
+
     // Path to the frontend build output
     const frontendBuildPath = path.join(__dirname, '../frontend/build');
-    
+
     // Check if frontend build exists
     if (!fs.existsSync(frontendBuildPath)) {
       throw new Error(
         'Frontend build directory not found. Please run "npm run build:frontend" first.\n' +
-        'You can use "npm run synth" or "npm run deploy" which will automatically build the frontend.'
+          'You can use "npm run synth" or "npm run deploy" which will automatically build the frontend.'
       );
     }
 
     // Deploy the config file to S3
-    const configDeployment = new s3deploy.BucketDeployment(this, 'ConfigDeployment', {
-      sources: [s3deploy.Source.asset(configDir)],
+    new s3deploy.BucketDeployment(this, 'ConfigDeployment', {
       sources: [s3deploy.Source.asset(configDir)],
       destinationBucket: websiteBucket,
       destinationKeyPrefix: 'config',
-      destinationKeyPrefix: 'config',
-      prune: false,
     });
 
     // Deploy the React app to S3
-    const reactDeployment = new s3deploy.BucketDeployment(this, 'ReactDeployment', {
-      sources: [s3deploy.Source.asset(frontendBuildPath)],
+    new s3deploy.BucketDeployment(this, 'ReactDeployment', {
       sources: [s3deploy.Source.asset(frontendBuildPath)],
       destinationBucket: websiteBucket,
       distribution,
