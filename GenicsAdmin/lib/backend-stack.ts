@@ -4,7 +4,6 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as crypto from 'crypto';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as path from 'path';
 
@@ -26,8 +25,7 @@ export class BackendStack extends cdk.Stack {
       },
     });
 
-
-    // Add domain to the user pool  
+    // Add domain to the user pool
     const userPoolDomain = this.userPool.addDomain('CognitoDomain', {
       cognitoDomain: {
         domainPrefix: `${this.stackName}`.toLowerCase().replace(/[^a-z0-9]/g, '-'),
@@ -170,25 +168,30 @@ export class BackendStack extends cdk.Stack {
       }
     );
 
-    // Outputs
-    new cdk.CfnOutput(this, 'UserPoolId', {
-      value: this.userPool.userPoolId,
-      description: 'Cognito User Pool ID',
-    });
-
-    new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value: this.userPoolClient.userPoolClientId,
-      description: 'Cognito User Pool Client ID',
-    });
-
-    new cdk.CfnOutput(this, 'UserPoolDomain', {
-      value: this.userPoolDomain,
-      description: 'Cognito User Pool Domain',
-    });
-
-    new cdk.CfnOutput(this, 'ApiEndpoint', {
+    // Create explicit CloudFormation exports that can be used by other stacks
+    // Note: These exports have explicit names that can be used in the frontend stack
+    new cdk.CfnOutput(this, 'GenicsApiEndpointExport', {
       value: this.api.url,
       description: 'API Gateway Endpoint',
+      exportName: 'GenicsAdmin-ApiEndpoint', // This name is used to import the value in other stacks
+    });
+
+    new cdk.CfnOutput(this, 'GenicsUserPoolIdExport', {
+      value: this.userPool.userPoolId,
+      description: 'Cognito User Pool ID',
+      exportName: 'GenicsAdmin-UserPoolId',
+    });
+
+    new cdk.CfnOutput(this, 'GenicsUserPoolClientIdExport', {
+      value: this.userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID',
+      exportName: 'GenicsAdmin-UserPoolClientId',
+    });
+
+    new cdk.CfnOutput(this, 'GenicsUserPoolDomainExport', {
+      value: this.userPoolDomain,
+      description: 'Cognito User Pool Domain',
+      exportName: 'GenicsAdmin-UserPoolDomain',
     });
   }
 }

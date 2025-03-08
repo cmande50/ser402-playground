@@ -21,12 +21,7 @@ const backendStack = new BackendStack(app, 'GenicsAdminBackendStack', {
 });
 
 // Create frontend stack
-const frontendStack = new FrontendStack(app, 'GenicsAdminFrontendStack', {
-  apiEndpoint: backendStack.api.url,
-  userPoolId: backendStack.userPool.userPoolId,
-  userPoolClientId: backendStack.userPoolClient.userPoolClientId,
-  userPoolDomain: backendStack.userPoolDomain,
-});
+const frontendStack = new FrontendStack(app, 'GenicsAdminFrontendStack');
 
 // Add dependency to ensure backend is deployed first
 frontendStack.addDependency(backendStack);

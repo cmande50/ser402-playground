@@ -11,16 +11,16 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as nodeJsLambda from 'aws-cdk-lib/aws-lambda-nodejs';
 
-export interface FrontendStackProps extends cdk.StackProps {
-  apiEndpoint: string;
-  userPoolId: string;
-  userPoolClientId: string;
-  userPoolDomain: string;
-}
-
 export class FrontendStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: FrontendStackProps) {
-    super(scope, id, props);
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
+
+    // Import values from the backend stack using CloudFormation's Fn.importValue
+    // This makes the cross-stack dependencies explicit at the CloudFormation level
+    const apiEndpoint = cdk.Fn.importValue('GenicsAdmin-ApiEndpoint');
+    const userPoolId = cdk.Fn.importValue('GenicsAdmin-UserPoolId');
+    const userPoolClientId = cdk.Fn.importValue('GenicsAdmin-UserPoolClientId');
+    const userPoolDomain = cdk.Fn.importValue('GenicsAdmin-UserPoolDomain');
 
     // Create S3 bucket for website hosting
     const websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
@@ -63,11 +63,11 @@ export class FrontendStack extends cdk.Stack {
 
     // Custom resource to update UserPoolClient with CloudFront URL
     const updateAuthURLsFunction = new nodeJsLambda.NodejsFunction(this, 'UpdateAuthURLsFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X, // Use the latest runtime
+      runtime: lambda.Runtime.NODEJS_18_X,
       entry: path.join(__dirname, '../lambda/update-auth-urls/index.ts'),
       handler: 'handler',
       bundling: {
-        externalModules: [], // Bundle everything
+        externalModules: [],
         minify: true,
         sourceMap: true,
       },
@@ -80,9 +80,7 @@ export class FrontendStack extends cdk.Stack {
     updateAuthURLsFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['cognito-idp:DescribeUserPoolClient', 'cognito-idp:UpdateUserPoolClient'],
-        resources: [
-          `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${props.userPoolId}`,
-        ],
+        resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${userPoolId}`],
       })
     );
 
@@ -93,8 +91,8 @@ export class FrontendStack extends cdk.Stack {
     const updateAuthURLs = new cdk.CustomResource(this, 'UpdateAuthURLs', {
       serviceToken: provider.serviceToken,
       properties: {
-        userPoolId: props.userPoolId,
-        userPoolClientId: props.userPoolClientId,
+        userPoolId,
+        userPoolClientId,
         cloudFrontDomain: distribution.distributionDomainName,
       },
     });
@@ -103,10 +101,10 @@ export class FrontendStack extends cdk.Stack {
     const configContent = `window.appConfig = ${JSON.stringify(
       {
         Region: this.region,
-        UserPoolId: props.userPoolId,
-        UserPoolClientId: props.userPoolClientId,
-        UserPoolDomain: props.userPoolDomain,
-        ApiEndpoint: props.apiEndpoint,
+        UserPoolId: userPoolId,
+        UserPoolClientId: userPoolClientId,
+        UserPoolDomain: userPoolDomain,
+        ApiEndpoint: apiEndpoint,
         RedirectSignIn: `https://${distribution.distributionDomainName}/callback`,
         RedirectSignOut: `https://${distribution.distributionDomainName}/`,
       },
