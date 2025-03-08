@@ -1,21 +1,23 @@
 {
   "name": "genics-admin",
   "version": "0.1.0",
-  "type": "module",
   "bin": {
-    "genicsadmin": "bin/genics-admin.js"
+    "genicsadmin": "dist/bin/genics-admin.js"
   },
   "scripts": {
     "build": "tsc",
+    "build:frontend": "cd frontend && npm install && npm run build && cd ..",
     "watch": "tsc -w",
     "test": "jest",
     "cdk": "cdk",
-    "deploy": "cdk deploy --all",
+    "deploy": "npm run build:frontend && cdk deploy --all",
+    "synth": "npm run build:frontend && cdk synth",
     "bootstrap": "cdk bootstrap",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
-    "check-format": "prettier --check \"**/*.{ts,js,json,md}\""
+    "check-format": "prettier --check \"**/*.{ts,js,json,md}\"",
+    "clean": "rm -rf node_modules && rm -rf dist && rm -rf cdk.out"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

@@ -25,17 +25,20 @@ export const useAuth = () => {
       email: 'test@example.com',
       picture: 'https://via.placeholder.com/150',
     };
-    
+
     setAuthState({
       isAuthenticated: true,
       user: mockUser,
     });
-    
+
     // Save to localStorage for persistence
-    localStorage.setItem('auth', JSON.stringify({
-      isAuthenticated: true,
-      user: mockUser,
-    }));
+    localStorage.setItem(
+      'auth',
+      JSON.stringify({
+        isAuthenticated: true,
+        user: mockUser,
+      })
+    );
   };
 
   const logout = () => {

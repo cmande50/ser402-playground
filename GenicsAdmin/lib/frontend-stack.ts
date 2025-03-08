@@ -8,6 +8,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export interface FrontendStackProps extends cdk.StackProps {
   apiEndpoint: string;
@@ -134,55 +135,51 @@ export class FrontendStack extends cdk.Stack {
       },
     });
 
-    // Generate config file for the React app
-    const configFunction = new lambda.Function(this, 'ConfigFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        const fs = require('fs');
-        const path = require('path');
-        
-        exports.handler = async (event) => {
-          const { userPoolId, userPoolClientId, userPoolDomain, apiEndpoint, region, cloudFrontDomain } = event.ResourceProperties;
-          
-          const config = {
-            Region: region,
-            UserPoolId: userPoolId,
-            UserPoolClientId: userPoolClientId,
-            UserPoolDomain: userPoolDomain,
-            ApiEndpoint: apiEndpoint,
-            RedirectSignIn: \`https://\${cloudFrontDomain}/\`,
-            RedirectSignOut: \`https://\${cloudFrontDomain}/\`,
-          };
-          
-          const configContent = \`window.appConfig = \${JSON.stringify(config, null, 2)};\`;
-          
-          fs.writeFileSync('/tmp/config.js', configContent);
-          
-          return {
-            statusCode: 200,
-            body: configContent,
-          };
-        }
-      `),
-    });
+    // Generate config.js file for frontend
+    const configContent = `window.appConfig = ${JSON.stringify({
+      Region: this.region,
+      UserPoolId: props.userPoolId,
+      UserPoolClientId: props.userPoolClientId,
+      UserPoolDomain: props.userPoolDomain,
+      ApiEndpoint: props.apiEndpoint,
+      RedirectSignIn: `https://${distribution.distributionDomainName}/`,
+      RedirectSignOut: `https://${distribution.distributionDomainName}/`,
+    }, null, 2)};`;
 
-    // Create config file deployment
+    // Create a temporary directory for the config file
+    const configDir = path.join(__dirname, '../frontend/public/config');
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    // Write the config file
+    fs.writeFileSync(path.join(configDir, 'config.js'), configContent);
+    
+    // Path to the frontend build output
+    const frontendBuildPath = path.join(__dirname, '../frontend/build');
+    
+    // Check if frontend build exists
+    if (!fs.existsSync(frontendBuildPath)) {
+      throw new Error(
+        'Frontend build directory not found. Please run "npm run build:frontend" first.\n' +
+        'You can use "npm run synth" or "npm run deploy" which will automatically build the frontend.'
+      );
+    }
+
+    // Deploy the config file to S3
     const configDeployment = new s3deploy.BucketDeployment(this, 'ConfigDeployment', {
-      sources: [s3deploy.Source.asset('/asset-output')], // This is just a placeholder
+      sources: [s3deploy.Source.asset(configDir)],
+      sources: [s3deploy.Source.asset(configDir)],
       destinationBucket: websiteBucket,
-      destinationKeyPrefix: '/',
+      destinationKeyPrefix: 'config',
+      destinationKeyPrefix: 'config',
       prune: false,
     });
 
-    // Set physical resource ID dependency on the config function
-    // This is a trick to make the CDK think the config function is being used
-    // even though we're not actually calling it directly yet
-    configDeployment.node.addDependency(configFunction);
-
     // Deploy the React app to S3
     const reactDeployment = new s3deploy.BucketDeployment(this, 'ReactDeployment', {
-      sources: [s3deploy.Source.asset(path.join(__dirname, '../frontend/build'))],
+      sources: [s3deploy.Source.asset(frontendBuildPath)],
+      sources: [s3deploy.Source.asset(frontendBuildPath)],
       destinationBucket: websiteBucket,
       distribution,
       distributionPaths: ['/*'],

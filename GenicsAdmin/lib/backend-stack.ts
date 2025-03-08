@@ -4,7 +4,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as crypto from 'crypto';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as path from 'path';
 
@@ -27,11 +27,14 @@ export class BackendStack extends cdk.Stack {
     });
 
     // Add domain for Cognito hosted UI
+    const deploymentHash = crypto
+      .createHash('md5')
+      .update(`${this.account}-${this.region}`)
+      .digest('hex')
+      .substring(0, 8);
     const userPoolDomain = this.userPool.addDomain('CognitoDomain', {
       cognitoDomain: {
-        domainPrefix: `genics-admin-${this.account}-${this.region}`
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '-'),
+        domainPrefix: `genics-admin-${deploymentHash}`,
       },
     });
     this.userPoolDomain = userPoolDomain.domainName;
@@ -47,7 +50,7 @@ export class BackendStack extends cdk.Stack {
 
     const googleClientSecretParam = new ssm.StringParameter(this, 'GoogleClientSecretParam', {
       parameterName: '/genics-admin/google-oauth/client-secret',
-      stringValue: cdk.SecretValue.unsafePlainText('PLACEHOLDER_CLIENT_SECRET').toString(),
+      stringValue: 'PLACEHOLDER_CLIENT_SECRET', // Using plain string instead of SecretValue
       tier: ssm.ParameterTier.STANDARD,
       description: 'Google OAuth Client Secret for Genics Admin',
       simpleName: false,
@@ -57,7 +60,7 @@ export class BackendStack extends cdk.Stack {
     const provider = new cognito.UserPoolIdentityProviderGoogle(this, 'Google', {
       userPool: this.userPool,
       clientId: googleClientIdParam.stringValue,
-      clientSecret: googleClientSecretParam.stringValue,
+      clientSecretValue: cdk.SecretValue.unsafePlainText(googleClientSecretParam.stringValue),
       scopes: ['profile', 'email'],
       attributeMapping: {
         email: cognito.ProviderAttribute.GOOGLE_EMAIL,
