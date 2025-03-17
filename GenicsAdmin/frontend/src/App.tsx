@@ -1,43 +1,40 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import LoginPage from './components/LoginPage';
-import TogglePage from './components/TogglePage';
-import GoogleAuthCallback from './components/GoogleAuthCallback';
-import { AuthProvider, useAuth } from './context/AuthContext';
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-  
-  return isAuthenticated ? <>{children}</> : <Navigate to="/" />;
-};
-
-function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/" element={<LoginPage />} />
-      <Route path="/callback" element={<GoogleAuthCallback />} />
-      <Route 
-        path="/toggle" 
-        element={
-          <ProtectedRoute>
-            <TogglePage />
-          </ProtectedRoute>
-        } 
-      />
-    </Routes>
-  );
-}
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from 'react-oidc-context';
+import LoginPage from './pages/LoginPage';
+import HomePage from './pages/HomePage';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
+  const auth = useAuth();
+
+  // Show loading screen while authentication is initializing
+  if (auth.isLoading) {
+    return <div>Loading authentication...</div>;
+  }
+
   return (
-    <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
-    </AuthProvider>
+    <BrowserRouter>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* Protected routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<HomePage />} />
+        </Route>
+        
+        {/* Redirect any unknown routes */}
+        <Route 
+          path="*" 
+          element={
+            auth.isAuthenticated ? 
+              <Navigate to="/" replace /> : 
+              <Navigate to="/login" replace />
+          } 
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

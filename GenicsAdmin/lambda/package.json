@@ -1,0 +1,19 @@
+{
+  "name": "genics-admin-lambda-functions",
+  "version": "1.0.0",
+  "description": "Lambda functions for Genics Admin application",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.441.0",
+    "@aws-sdk/client-ec2": "^3.767.0",
+    "@aws-sdk/client-s3": "^3.450.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.126",
+    "@types/node": "^18.18.8",
+    "typescript": "^5.2.2"
+  }
+}
